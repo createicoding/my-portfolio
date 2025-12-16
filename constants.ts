@@ -10,9 +10,9 @@ export const INITIAL_DATA: PortfolioData = {
     "metaKeywords": "portfolio, resume, developer, designer",
     "metaAuthor": "Awesome Themez",
     "github": {
-      "username": "",
-      "repo": "",
-      "pat": "",
+      "username": "createicoding",
+      "repo": "my-portfolio",
+      "pat": "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",
       "branch": "main"
     }
   },
