@@ -12,7 +12,7 @@ export const INITIAL_DATA: PortfolioData = {
     "github": {
       "username": "createicoding",
       "repo": "my-portfolio",
-      "pat": "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",
+      "pat": "",
       "branch": "main"
     }
   },
