@@ -21,8 +21,7 @@ import {
   AlertCircle,
   Github,
   Rocket,
-  CheckCircle2,
-  XCircle
+  CheckCircle2
 } from 'lucide-react';
 import { INITIAL_DATA } from './constants';
 import { PortfolioData, EducationItem, ExperienceItem, SkillItem, ServiceItem, WorkItem, WorkCategory, Settings, GitHubConfig } from './types';
