@@ -20,7 +20,9 @@ import {
   Loader2,
   AlertCircle,
   Github,
-  Rocket
+  Rocket,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { INITIAL_DATA } from './constants';
 import { PortfolioData, EducationItem, ExperienceItem, SkillItem, ServiceItem, WorkItem, WorkCategory, Settings, GitHubConfig } from './types';
@@ -179,6 +181,7 @@ export default function App() {
 
   // Deployment State
   const [deploying, setDeploying] = useState(false);
+  const [testLoading, setTestLoading] = useState(false);
 
   // Load data from localStorage on mount
   useEffect(() => {
@@ -311,6 +314,69 @@ export default function App() {
 
   // --- Core Feature Handlers ---
 
+  const getSanitizedGithubConfig = () => {
+     const gh = data.settings.github;
+     if (!gh) return null;
+
+     const username = (gh.username || '').trim();
+     const pat = (gh.pat || '').trim();
+     let repo = (gh.repo || '').trim();
+     const branch = (gh.branch || 'main').trim();
+
+     // Sanitize Repo
+     if (repo.endsWith('.git')) repo = repo.slice(0, -4);
+     repo = repo.replace(/^\/+|\/+$/g, '');
+     if (repo.includes('/')) {
+         const parts = repo.split('/');
+         // If user entered 'username/repo', strip username
+         if (parts.length === 2 && parts[0].toLowerCase() === username.toLowerCase()) {
+             repo = parts[1];
+         }
+         // If user entered 'owner/repo', we currently keep just the repo part to assume username matches owner
+         // Otherwise we'd need to change how we construct the URL
+         else if (parts.length === 2) {
+             repo = parts[1];
+         }
+     }
+
+     return { username, repo, pat, branch };
+  };
+
+  const handleTestConnection = async () => {
+      const config = getSanitizedGithubConfig();
+      if (!config || !config.username || !config.repo || !config.pat) {
+          alert("Please enter Username, Repository and PAT first.");
+          return;
+      }
+
+      setTestLoading(true);
+      try {
+          const res = await fetch(`https://api.github.com/repos/${config.username}/${config.repo}`, {
+              headers: { 
+                'Authorization': `token ${config.pat}`,
+                'Accept': 'application/vnd.github.v3+json'
+              }
+          });
+
+          if (res.ok) {
+              const json = await res.json();
+              alert(`✅ Connection Successful!\n\nConnected to: ${json.full_name}\nAccess Level: ${json.permissions ? (json.permissions.push ? 'Write (Good)' : 'Read Only (Bad)') : 'Unknown'}`);
+          } else {
+              const text = await res.text();
+              let msg = res.statusText;
+              try { msg = JSON.parse(text).message; } catch(e){}
+              
+              if (res.status === 401) alert(`❌ Authentication Failed (401)\n\nBad Credentials. Please check your Personal Access Token (PAT). Ensure it has no extra spaces.`);
+              else if (res.status === 404) alert(`❌ Not Found (404)\n\nRepository not found. Check your Username and Repository name.\nIf the repo is private, ensure your PAT has 'repo' scope.`);
+              else alert(`❌ Error (${res.status}): ${msg}`);
+          }
+      } catch (e: any) {
+          alert("Network Error: " + e.message);
+      } finally {
+          setTestLoading(false);
+      }
+  };
+
   const handleInstantView = () => {
     // 1. Sync critical fields
     const dataToSave = {
@@ -330,8 +396,8 @@ export default function App() {
   };
 
   const handleDeploy = async () => {
-    const gh = data.settings.github;
-    if (!gh || !gh.pat || !gh.username || !gh.repo) {
+    const config = getSanitizedGithubConfig();
+    if (!config || !config.username || !config.repo || !config.pat) {
       alert("Deployment Configuration Missing! Please go to the Settings tab and configure your GitHub username, repo, and Personal Access Token (PAT).");
       setActiveTab('settings');
       return;
@@ -359,13 +425,13 @@ export const INITIAL_DATA: PortfolioData = ${JSON.stringify(dataToSave, null, 2)
 `;
       const encodedContent = btoa(unescape(encodeURIComponent(fileContent))); // Handle UTF-8 strings
       const filePath = 'constants.ts'; // Assuming constants.ts is in root of src or similar
-      const branch = gh.branch || 'main';
+      const branch = config.branch;
 
       // 3. Get SHA of existing file (Required by GitHub API for updates)
-      const getUrl = `https://api.github.com/repos/${gh.username}/${gh.repo}/contents/${filePath}?ref=${branch}`;
+      const getUrl = `https://api.github.com/repos/${config.username}/${config.repo}/contents/${filePath}?ref=${branch}`;
       const getRes = await fetch(getUrl, {
         headers: {
-          'Authorization': `token ${gh.pat}`,
+          'Authorization': `token ${config.pat}`,
           'Accept': 'application/vnd.github.v3+json'
         }
       });
@@ -379,18 +445,21 @@ export const INITIAL_DATA: PortfolioData = ${JSON.stringify(dataToSave, null, 2)
              errorMessage = errorJson.message || errorMessage;
          } catch(e) { /* ignore */ }
          
-         throw new Error(`Failed to fetch file info (${getRes.status}): ${errorMessage}. Check your Repo Name, Branch, and PAT permissions.`);
+         if (getRes.status === 401) throw new Error("Bad Credentials (401). Check your PAT.");
+         if (getRes.status === 404) throw new Error("File or Repo not found (404). Check Repo name/Branch, or check if 'constants.ts' exists.");
+         
+         throw new Error(`Failed to fetch file info (${getRes.status}): ${errorMessage}`);
       }
 
       const getJson = await getRes.json();
       const sha = getJson.sha;
 
       // 4. Update File via GitHub API
-      const putUrl = `https://api.github.com/repos/${gh.username}/${gh.repo}/contents/${filePath}`;
+      const putUrl = `https://api.github.com/repos/${config.username}/${config.repo}/contents/${filePath}`;
       const putRes = await fetch(putUrl, {
         method: 'PUT',
         headers: {
-          'Authorization': `token ${gh.pat}`,
+          'Authorization': `token ${config.pat}`,
           'Accept': 'application/vnd.github.v3+json',
           'Content-Type': 'application/json',
         },
@@ -525,10 +594,14 @@ export const INITIAL_DATA: PortfolioData = ${JSON.stringify(dataToSave, null, 2)
                         />
                     </div>
                     <div className="md:col-span-2">
-                        <p className="text-[10px] text-gray-400 mt-2 bg-gray-800 p-2 rounded border border-gray-700">
-                            <b>Note:</b> Your PAT must have the <code>repo</code> scope (full control of private repositories) or <code>public_repo</code> scope (if public). <br/>
-                            This key is stored only in your browser's local storage.
-                        </p>
+                        <div className="flex justify-between items-center bg-gray-800 p-3 rounded border border-gray-700 mt-2">
+                             <p className="text-[10px] text-gray-400">
+                                <b>Note:</b> Your PAT must have the <code>repo</code> scope.
+                             </p>
+                             <Button onClick={handleTestConnection} disabled={testLoading} variant="outline" className="border-white text-white hover:bg-white hover:text-black">
+                                 {testLoading ? <span className="flex items-center gap-2"><Loader2 className="animate-spin" size={14}/> Testing...</span> : <span className="flex items-center gap-2"><CheckCircle2 size={14}/> Test Connection</span>}
+                             </Button>
+                        </div>
                     </div>
                 </div>
             </div>
