@@ -370,7 +370,18 @@ export const INITIAL_DATA: PortfolioData = ${JSON.stringify(dataToSave, null, 2)
         }
       });
 
-      if (!getRes.ok) throw new Error(`Failed to fetch file info: ${getRes.statusText}`);
+      if (!getRes.ok) {
+         // Attempt to read error message
+         const errorText = await getRes.text();
+         let errorMessage = getRes.statusText;
+         try {
+             const errorJson = JSON.parse(errorText);
+             errorMessage = errorJson.message || errorMessage;
+         } catch(e) { /* ignore */ }
+         
+         throw new Error(`Failed to fetch file info (${getRes.status}): ${errorMessage}. Check your Repo Name, Branch, and PAT permissions.`);
+      }
+
       const getJson = await getRes.json();
       const sha = getJson.sha;
 
@@ -391,7 +402,17 @@ export const INITIAL_DATA: PortfolioData = ${JSON.stringify(dataToSave, null, 2)
         })
       });
 
-      if (!putRes.ok) throw new Error(`Deployment failed: ${putRes.statusText}`);
+      if (!putRes.ok) {
+         // Attempt to read error message
+         const errorText = await putRes.text();
+         let errorMessage = putRes.statusText;
+         try {
+             const errorJson = JSON.parse(errorText);
+             errorMessage = errorJson.message || errorMessage;
+         } catch(e) { /* ignore */ }
+         
+         throw new Error(`Deployment failed (${putRes.status}): ${errorMessage}`);
+      }
 
       alert("Deployment Started! Changes pushed to GitHub. The live site will update in a few minutes.");
       
@@ -484,7 +505,16 @@ export const INITIAL_DATA: PortfolioData = ${JSON.stringify(dataToSave, null, 2)
                             placeholder="e.g. my-portfolio"
                         />
                     </div>
-                    <div className="md:col-span-2">
+                     <div>
+                        <label className="block text-xs font-bold text-gray-400 mb-2 uppercase">Branch</label>
+                         <input 
+                            className="w-full bg-gray-800 border border-gray-600 rounded p-2 text-sm focus:border-white outline-none transition-colors"
+                            value={data.settings.github?.branch || 'main'}
+                            onChange={(e) => updateGithub('branch', e.target.value)}
+                            placeholder="main"
+                        />
+                    </div>
+                    <div>
                         <label className="block text-xs font-bold text-gray-400 mb-2 uppercase">Personal Access Token (PAT)</label>
                          <input 
                             type="password"
@@ -493,8 +523,11 @@ export const INITIAL_DATA: PortfolioData = ${JSON.stringify(dataToSave, null, 2)
                             onChange={(e) => updateGithub('pat', e.target.value)}
                             placeholder="ghp_xxxxxxxxxxxxxxxxxxxx..."
                         />
-                        <p className="text-[10px] text-gray-500 mt-2">
-                            Token requires <b>repo</b> scope. It is saved in your browser storage only.
+                    </div>
+                    <div className="md:col-span-2">
+                        <p className="text-[10px] text-gray-400 mt-2 bg-gray-800 p-2 rounded border border-gray-700">
+                            <b>Note:</b> Your PAT must have the <code>repo</code> scope (full control of private repositories) or <code>public_repo</code> scope (if public). <br/>
+                            This key is stored only in your browser's local storage.
                         </p>
                     </div>
                 </div>
